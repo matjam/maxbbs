@@ -3,7 +3,7 @@
 MaxBBS is a toy BBS server that will at some point implement most common BBS
 functions such as message areas, file areas, chat, doors, etc.
 
-MaxBBS is designed as a homage to the very fine Maximus BBS; specifically it
+MaxBBS is designed as a homage to the very fine [Maximus BBS](https://github.com/sdudley/maximus); specifically it
 is intended to support a version of MECCA very close to the original.
 
 MECCA is a templating language for MaxBBS that allows you to build your BBS

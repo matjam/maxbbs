@@ -66,7 +66,7 @@ func Tokenize(input string) ([]Token, error) {
 					if err != nil {
 						if errors.Is(err, ErrEndOfInput) {
 							t.tokens = append(t.tokens, tokens...)
-							return t.tokens
+							return t.tokens, nil
 						}
 						return []Token{}, err
 					}
@@ -150,8 +150,36 @@ func (t *tokenizer) tokenStart() ([]Token, error) {
 	}
 }
 
-func (t *tokenizer) readUntil(r rune) (string, error) {
+func (t *tokenizer) processTokenWithParameters(name string) (Token, error) {
+	switch strings.ToLower(name) {
+	case "comment":
+		return t.processComment()
+	}
 
+	return Token{}, ErrUnknownToken
+}
+
+func (t *tokenizer) processComment() (Token, error) {
+	commentText, err := t.readUntil(']')
+	return Token{Type: COMMENT, Value: commentText}, err
+}
+
+// reads everything until the given rune and returns it as a string.
+func (t *tokenizer) readUntil(r rune) (string, error) {
+	var value strings.Builder
+
+	for {
+		if c, err := t.next(); err == nil {
+			switch c {
+			case r:
+				return value.String(), nil
+			default:
+				value.WriteRune(c)
+			}
+		} else {
+			return value.String(), err
+		}
+	}
 }
 
 // gets the next character

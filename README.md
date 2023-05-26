@@ -19,6 +19,14 @@ displaying different data depending on who is logged on, etc. This feature was
 one of the defining features of MaximusBBS and I wanted to bring it along if
 I could.
 
+While I intend to implement support for MECCA, MEX support would be more
+complex and I'm not currently keen to do that. There are other embeddable
+programming languages like LUA that are a good fit to replace what can be done
+in MEX, so I am likely to do that first. That said, there is a ton of really
+cool MEX code in the MaximusBBS distribution that would be super nice to
+support. There's no need to "compile" things anymore, straight up interpreting
+the code would be fine. So maybe I'll do that.
+
 # Current status
 
 Complete

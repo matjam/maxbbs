@@ -1,104 +1,172 @@
-package mecca_test
+package mecca
 
 import (
+	"errors"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
-
-	"github.com/matjam/maxbbs/internal/mecca"
 )
 
-func TestPlainString(t *testing.T) {
-	input := `Just a plain string`
-	got, err := mecca.Tokenize(input)
-	if err != nil {
-		t.Error(err)
-	}
+func getTestCaseLine() int {
+	_, _, line, _ := runtime.Caller(1)
 
-	expected := []mecca.Token{
-		{Type: mecca.STRING, Value: `Just a plain string`},
-	}
-
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("expected %#v got %#v", expected, got)
-	}
+	return line
 }
 
-func TestEscapedBracket(t *testing.T) {
-	input := `Want to check your mail [[Y,n]?`
-	got, err := mecca.Tokenize(input)
-	if err != nil {
-		t.Error(err)
+func TestTokenizer(t *testing.T) {
+	type testCase struct {
+		line     int
+		input    string
+		expected []Token
+		err      error
 	}
 
-	expected := []mecca.Token{
-		{Type: mecca.STRING, Value: `Want to check your mail [Y,n]?`},
+	cases := []testCase{
+		{
+			getTestCaseLine(),
+			`[white]Leave a message to [sysop_name] [[Y,n]? [gray ansreq menu]yn|`,
+			[]Token{
+				{Type: T_WHITE, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: "Leave a message to ", Args: []string(nil)},
+				{Type: T_SYSOP_NAME, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: " [Y,n]? ", Args: []string(nil)},
+				{Type: T_GRAY, Value: "", Args: []string(nil)},
+				{Type: T_ANSREQ, Value: "", Args: []string(nil)},
+				{Type: T_MENU, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: "yn|", Args: []string(nil)},
+			},
+			nil,
+		},
+		{
+			getTestCaseLine(),
+			`Some text [white]Leave a message to [sysop_name] [[Y,n]? [gray ansreq menu]yn|`,
+			[]Token{
+				{Type: T_STRING, Value: "Some text ", Args: []string(nil)},
+				{Type: T_WHITE, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: "Leave a message to ", Args: []string(nil)},
+				{Type: T_SYSOP_NAME, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: " [Y,n]? ", Args: []string(nil)},
+				{Type: T_GRAY, Value: "", Args: []string(nil)},
+				{Type: T_ANSREQ, Value: "", Args: []string(nil)},
+				{Type: T_MENU, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: "yn|", Args: []string(nil)},
+			},
+			nil,
+		},
+		{
+			getTestCaseLine(),
+			`text [   sysop_name] text [sysop_name    ] text [   sysop_name   ] text`,
+			[]Token{
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_SYSOP_NAME, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: " text ", Args: []string(nil)},
+				{Type: T_SYSOP_NAME, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: " text ", Args: []string(nil)},
+				{Type: T_SYSOP_NAME, Value: "", Args: []string(nil)},
+				{Type: T_STRING, Value: " text", Args: []string(nil)},
+			},
+			nil,
+		},
+		{
+			getTestCaseLine(),
+			`text [   token`,
+			[]Token{},
+			ErrUnexpectedEndOfInput,
+		},
+		{
+			getTestCaseLine(),
+			`text [   token [ invalid ] text`,
+			[]Token{},
+			ErrTokenStartInsideTokenBlock,
+		},
+		{
+			getTestCaseLine(),
+			`text [comment this should be completely ignored] text`,
+			[]Token{
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_STRING, Value: " text", Args: []string(nil)},
+			},
+			nil,
+		},
+		{
+			getTestCaseLine(),
+			`text [invalid token] text`,
+			[]Token{
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_STRING, Value: " text", Args: []string(nil)},
+			},
+			ErrUnknownToken,
+		},
+		{
+			getTestCaseLine(),
+			`text [fg black] text`,
+			[]Token{
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_FG, Value: "", Args: []string{"black"}},
+				{Type: T_STRING, Value: " text", Args: []string(nil)},
+			},
+			nil,
+		},
+		{
+			getTestCaseLine(),
+			`text [locate 12 13] text`,
+			[]Token{
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_LOCATE, Value: "", Args: []string{"12", "13"}},
+				{Type: T_STRING, Value: " text", Args: []string(nil)},
+			},
+			nil,
+		},
+		{
+			getTestCaseLine(),
+			`text [locate 12] text`,
+			[]Token{},
+			ErrNotEnoughArguments,
+		},
+		{
+			getTestCaseLine(),
+			`text [repeatseq 4]four[10] text`,
+			[]Token{
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_REPEATSEQ, Value: "", Args: []string{"4", "four", "10"}},
+				{Type: T_STRING, Value: " text", Args: []string(nil)},
+			},
+			nil,
+		},
+		{
+			getTestCaseLine(),
+			`text [fg white]text [goto jump]text [/jump]text`,
+			[]Token{
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_FG, Value: "", Args: []string{"white"}},
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_GOTO, Value: "", Args: []string{"jump"}},
+				{Type: T_STRING, Value: "text ", Args: []string(nil)},
+				{Type: T_LABEL, Value: "jump", Args: []string(nil)},
+				{Type: T_STRING, Value: "text", Args: []string(nil)},
+			},
+			nil,
+		},
 	}
 
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("expected %#v got %#v", expected, got)
-	}
-}
+	for _, c := range cases {
+		r := strings.NewReader(c.input)
+		got, err := tokenize(r)
 
-func TestTokenization(t *testing.T) {
-	input := `Just a [save][white]plain [load]string`
-	got, err := mecca.Tokenize(input)
-	if err != nil {
-		t.Error(err)
-	}
+		if c.err != nil {
+			if err == nil || !errors.Is(err, c.err) {
+				t.Errorf("\n\n    line: %v\nexpected error: %v\n     got error: %v\n\n", c.line, c.err, err)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("\n\n    line: %v\nexpected error: %v\n     got error: %v\n\n", c.line, c.err, err)
+			}
 
-	expected := []mecca.Token{
-		{Type: mecca.STRING, Value: "Just a "},
-		{Type: mecca.SAVE, Value: "save"},
-		{Type: mecca.WHITE, Value: "white"},
-		{Type: mecca.STRING, Value: "plain "},
-		{Type: mecca.LOAD, Value: "load"},
-		{Type: mecca.STRING, Value: "string"},
+			if !reflect.DeepEqual(got, c.expected) {
+				t.Errorf("\n\n    line: %v\nexpected: %#v\n     got: %#v\n\n", c.line, c.expected, got)
+			}
+		}
 	}
 
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("got %#v expected %#v", got, expected)
-	}
-}
-
-func TestCompoundTokenization(t *testing.T) {
-	input := `Just a [save white]plain [load]string`
-	got, err := mecca.Tokenize(input)
-	if err != nil {
-		t.Error(err)
-	}
-
-	expected := []mecca.Token{
-		{Type: mecca.STRING, Value: "Just a "},
-		{Type: mecca.SAVE, Value: "save"},
-		{Type: mecca.WHITE, Value: "white"},
-		{Type: mecca.STRING, Value: "plain "},
-		{Type: mecca.LOAD, Value: "load"},
-		{Type: mecca.STRING, Value: "string"},
-	}
-
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("got %#v expected %#v", got, expected)
-	}
-}
-
-func TestTokenizationComments(t *testing.T) {
-	input := `Just a [save white][comment ignore this]plain [load]string`
-	got, err := mecca.Tokenize(input)
-	if err != nil {
-		t.Error(err)
-	}
-
-	expected := []mecca.Token{
-		{Type: mecca.STRING, Value: "Just a "},
-		{Type: mecca.SAVE, Value: "save"},
-		{Type: mecca.WHITE, Value: "white"},
-		{Type: mecca.COMMENT, Value: "ignore this"},
-		{Type: mecca.STRING, Value: "plain "},
-		{Type: mecca.LOAD, Value: "load"},
-		{Type: mecca.STRING, Value: "string"},
-	}
-
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("got %#v expected %#v", got, expected)
-	}
 }

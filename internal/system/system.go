@@ -8,10 +8,10 @@ func NewBBS() *BBS {
 	return &BBS{}
 }
 
-func (b *BBS) SysName() string {
-	return config.Get().SysName
+func (b *BBS) SystemName() string {
+	return config.Get().Server.Name
 }
 
 func (b *BBS) SysopName() string {
-	return config.Get().SysopName
+	return config.Get().Server.Sysop
 }

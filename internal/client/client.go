@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 
+	"github.com/matjam/maxbbs/internal/mecca"
 	"github.com/matjam/telnet"
 )
 
@@ -27,35 +28,54 @@ var stateMeccaMap = map[clientState]string{
 	STATE_MAIN_MENU: "misc/main_menu.mec",
 }
 
+const (
+	defaultWidth        = 80
+	defaultHeight       = 24
+	defaultColorEnabled = false
+	defaultAnsiEnabled  = false
+)
+
 type TelnetClient struct {
-	W     uint16 // width
-	H     uint16 // height
-	Color bool   // color capable
-	ANSI  bool   // ansi capable
+	width        uint16 // width
+	height       uint16 // height
+	colorEnabled bool   // color capable
+	ansiEnabled  bool   // ansi capable
 
 	conn *telnet.Connection
+	mec  mecca.Interpreter
 
 	state clientState
 }
 
-type Option = func(c *TelnetClient)
+type Option func(*TelnetClient)
 
-func WithTerminalSize(W uint16, H uint16) Option {
+func WithSize(width uint16, height uint16) Option {
 	return func(c *TelnetClient) {
-		c.W = W
-		c.H = H
+		c.width = width
+		c.height = height
 	}
 }
 
 func WithColor(colorEnabled bool) Option {
 	return func(c *TelnetClient) {
-		c.Color = colorEnabled
+		c.colorEnabled = colorEnabled
 	}
 }
 
-func NewTelnetClient(conn *telnet.Connection, opts ...Option) *TelnetClient {
+func WithANSI(ansiEnabled bool) Option {
+	return func(c *TelnetClient) {
+		c.ansiEnabled = ansiEnabled
+	}
+}
+
+func NewTelnetClient(conn *telnet.Connection, bbs mecca.BBS, opts ...Option) *TelnetClient {
 	tc := &TelnetClient{
-		conn: conn,
+		conn:         conn,
+		mec:          mecca.NewInterpreter(bbs),
+		width:        defaultWidth,
+		height:       defaultHeight,
+		colorEnabled: defaultColorEnabled,
+		ansiEnabled:  defaultAnsiEnabled,
 	}
 
 	for _, opt := range opts {

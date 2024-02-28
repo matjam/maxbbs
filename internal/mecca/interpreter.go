@@ -4,11 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"reflect"
 	"strings"
 	"sync"
-
-	"github.com/gookit/slog"
 )
 
 type cachedTemplate struct {
@@ -21,31 +20,33 @@ type cachedTemplate struct {
 
 type Interpreter struct {
 	templateCache sync.Map // stores a map of name:cachedTemplate
+	bbs           BBS
+	in            io.Reader // attached input from terminal
+	out           io.Writer // attached output to terminal
 }
 
-type InterpreterSession struct {
-	*Interpreter
-	in  io.Reader // attached input from terminal
-	out io.Writer // attached output to terminal
-}
+type Option func(session *Interpreter)
 
-// NewInterpreter initializes a new interpreter which can be shared among
-// multiple terminal connections.
-func NewInterpreter() Interpreter {
-	return Interpreter{}
-}
+// NewInterpreter initializes a new interpreter
+func NewInterpreter(bbs BBS, input io.Reader, output io.Writer, opts ...Option) *Interpreter {
+	i := Interpreter{
+		bbs: bbs,
+		in:  input,
+		out: output,
+	}
 
-// NewSession will create an InterpreterSession which is specific to a
-// given terminal connection.
-func (i *Interpreter) NewSession(in io.Reader, out io.Writer) InterpreterSession {
-	return InterpreterSession{i, in, out}
+	for _, opt := range opts {
+		opt(&i)
+	}
+
+	return &i
 }
 
 // Compile takes the given MECCA template string and compiles it to MECCA
 // Tokens. Each name/template pair should be unique and consistent. If you
 // provide a new template for a given name, the cached compiled template
 // will be replaced.
-func (s InterpreterSession) Compile(name string, template string) error {
+func (s *Interpreter) Compile(name string, template string) error {
 	t := strings.NewReader(template)
 	tokens, err := tokenize(t)
 	if err != nil {
@@ -100,10 +101,10 @@ func (s InterpreterSession) Exec(name string) error {
 		if ok {
 			err := handlerFunc(s, token)
 			if err != nil {
-				slog.Errorf("template %v token %v error: %v", name, token.Type, err.Error())
+				slog.Error("template token error", "template", name, "token", token.Type, "error", err.Error())
 			}
 		} else {
-			slog.Warnf("template %v token %v unimplemented", name, token.Type)
+			slog.Warn("template token unimplemented", "template", name, "token", token.Type)
 		}
 
 		template.pc++
@@ -115,8 +116,9 @@ func (s InterpreterSession) Exec(name string) error {
 type tokenHandlerFunc func(InterpreterSession, Token) error
 
 var handlerTable = map[TokenType]tokenHandlerFunc{
-	T_STRING:   handleString,
-	T_SYS_NAME: handleSysName,
+	T_STRING:     handleString,
+	T_SYS_NAME:   handleSysName,
+	T_SYSOP_NAME: handleSysopName,
 }
 
 func handleString(s InterpreterSession, t Token) error {
@@ -125,6 +127,11 @@ func handleString(s InterpreterSession, t Token) error {
 }
 
 func handleSysName(s InterpreterSession, t Token) error {
-	_, err := s.out.Write([]byte("MaxBBS"))
+	_, err := s.out.Write([]byte(s.bbs.SystemName()))
+	return err
+}
+
+func handleSysopName(s InterpreterSession, t Token) error {
+	_, err := s.out.Write([]byte(s.bbs.SysopName()))
 	return err
 }

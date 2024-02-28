@@ -1,30 +1,35 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 
-	"github.com/goccy/go-yaml"
-	"github.com/gookit/slog"
+	"github.com/BurntSushi/toml"
 )
 
 type Config struct {
-	SysopName string `yaml:"sysop_name"`
-	SysName   string `yaml:"sys_name"`
+	Server struct {
+		Sysop string
+		Name  string
+
+		Telnet struct {
+			Host string
+			Port int
+		}
+	}
 }
 
-const configPath = "cfg/max.yaml"
+const configPath = "cfg/max.toml"
 
 var config *Config
 
 func Get() *Config {
 	if config == nil {
 		config = &Config{}
-		data, err := os.ReadFile(configPath)
+		_, err := toml.DecodeFile(configPath, config)
 		if err != nil {
-			slog.Panicf("could not load config at %v: %v", configPath, err.Error())
-		}
-		if err := yaml.Unmarshal(data, config); err != nil {
-			slog.Panicf("could not parse config at %v: %v", configPath, err.Error())
+			slog.Error("could not load config", "file", configPath, "error", err.Error())
+			os.Exit(-1)
 		}
 	}
 

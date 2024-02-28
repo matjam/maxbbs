@@ -2,16 +2,26 @@ package main
 
 import (
 	"bytes"
+	"log/slog"
+	"os"
+	"time"
 
-	"github.com/gookit/slog"
+	"github.com/lmittmann/tint"
 	"github.com/matjam/maxbbs/internal/mecca"
+	"github.com/matjam/maxbbs/internal/system"
+	"github.com/mattn/go-isatty"
 )
 
 func main() {
-	slog.Configure(func(logger *slog.SugaredLogger) {
-		f := logger.Formatter.(*slog.TextFormatter)
-		f.EnableColor = true
-	})
+	slog.SetDefault(slog.New(
+		tint.NewHandler(os.Stdout, &tint.Options{
+			Level:      slog.LevelDebug,
+			TimeFormat: time.Kitchen,
+			NoColor:    !isatty.IsTerminal(os.Stdout.Fd()),
+		}),
+	))
+
+	bbs := system.NewBBS()
 
 	slog.Info("running test template")
 
@@ -20,16 +30,17 @@ func main() {
 	var in bytes.Buffer
 	var out bytes.Buffer
 
-	interpreter := mecca.NewInterpreter()
+	interpreter := mecca.NewInterpreter(bbs)
 	session := interpreter.NewSession(&in, &out)
 	err := session.Compile("test_template", template)
 	if err != nil {
-		slog.Panicf(err.Error())
+		panic(err)
 	}
 
 	err = session.Exec("test_template")
 	if err != nil {
-		slog.Panicf(err.Error())
+		panic(err)
 	}
 
+	slog.Info("output", out.String())
 }

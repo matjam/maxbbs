@@ -1,7 +1,0 @@
-[server]
-name = "Stupendous Max BBS"
-sysop = "matjam"
-
-[server.telnet]
-host = "127.0.0.1"
-port = 9999

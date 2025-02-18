@@ -2,56 +2,53 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
-	"os"
+	"log"
 	"time"
 
-	"github.com/lmittmann/tint"
-	"github.com/matjam/maxbbs/internal/client"
-	"github.com/matjam/maxbbs/internal/config"
-	"github.com/matjam/maxbbs/internal/system"
-	"github.com/matjam/telnet"
-	"github.com/matjam/telnet/options"
-	"github.com/mattn/go-isatty"
+	"github.com/charmbracelet/ssh"
+	"github.com/charmbracelet/wish"
+	lm "github.com/charmbracelet/wish/logging"
+	"github.com/matjam/mecca"
 )
 
-func main() {
-	// This is share between all the sessions, and provides access to messages, forums, etc.
-	bbs := system.NewBBS()
+// Handle SSH requests.
+func handler(next ssh.Handler) ssh.Handler {
+	return func(sess ssh.Session) {
+		// Create a new renderer.
+		interpreter := mecca.NewInterpreter(mecca.WithTemplateRoot("config/mec"), mecca.WithSession(sess))
 
-	slog.SetDefault(slog.New(
-		tint.NewHandler(os.Stdout, &tint.Options{
-			Level:      slog.LevelDebug,
-			TimeFormat: time.Kitchen,
-			NoColor:    !isatty.IsTerminal(os.Stdout.Fd()),
-		}),
-	))
+		_, _, active := sess.Pty()
+		if !active {
+			next(sess)
+			return
+		}
 
-	slog.Info("starting server " + bbs.SystemName())
+		err := interpreter.RenderTemplate("welcome.mec", nil)
+		if err != nil {
+			log.Println(err)
+			next(sess)
+			return
+		}
 
-	telnetHandler := func(c *telnet.Connection) {
-		slog.Info("Connection received", "remote", c.RemoteAddr())
+		time.Sleep(5 * time.Second)
 
-		time.Sleep(time.Millisecond)
-		nh := c.OptionHandlers[telnet.TeloptNAWS].(*options.NAWSHandler)
-		slog.Info("Client terminal settings", "width", nh.Width, "height", nh.Height)
-
-		conn := client.NewTelnetClient(c, client.BBSOption(bbs))
-		conn.Start()
-
-		slog.Info("Disconnected", "remote", c.RemoteAddr())
+		next(sess)
 	}
+}
 
-	listenAddress := fmt.Sprintf("%v:%v", config.Get().Server.Telnet.Host, config.Get().Server.Telnet.Port)
-
-	svr := telnet.NewServer(
-		listenAddress,
-		telnet.HandleFunc(telnetHandler),
-		options.NAWSOption,
+func main() {
+	port := 3456
+	s, err := wish.NewServer(
+		wish.WithAddress(fmt.Sprintf(":%d", port)),
+		wish.WithHostKeyPath("ssh_example"),
+		wish.WithMiddleware(handler, lm.Middleware()),
 	)
-	slog.Info("Telnet server listening", "address", listenAddress)
-
-	if err := svr.ListenAndServe(); err != nil {
-		slog.Error("Unable to start telnet server", "error", err.Error())
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("SSH server listening on port %d", port)
+	log.Printf("To connect from your local machine run: ssh localhost -p %d", port)
+	if err := s.ListenAndServe(); err != nil {
+		log.Fatal(err)
 	}
 }

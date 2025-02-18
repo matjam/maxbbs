@@ -3,13 +3,14 @@ module github.com/matjam/maxbbs
 go 1.24.0
 
 require (
-	github.com/charmbracelet/lipgloss v1.0.0
+	github.com/charmbracelet/lipgloss v1.0.0 // indirect
 	github.com/matjam/mecca v0.0.0-20250218081439-c1ea3712465e
 )
 
 replace github.com/matjam/mecca => ../mecca
 
 require (
+	github.com/charmbracelet/log v0.4.0
 	github.com/charmbracelet/ssh v0.0.0-20250213143314-8712ec3ff3ef
 	github.com/charmbracelet/wish v1.4.6
 )
@@ -19,7 +20,6 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/bubbletea v1.3.3 // indirect
 	github.com/charmbracelet/keygen v0.5.1 // indirect
-	github.com/charmbracelet/log v0.4.0 // indirect
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/conpty v0.1.0 // indirect
 	github.com/charmbracelet/x/errors v0.0.0-20250213125511-a0c32e22e4fc // indirect

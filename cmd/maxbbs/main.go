@@ -10,31 +10,34 @@ import (
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/logging"
+	"github.com/matjam/maxbbs/internal/screens/login"
 	"github.com/matjam/mecca"
 )
 
+func connectionHandler(sess ssh.Session) {
+	// Create a new interpreter with a session.
+	interpreter := mecca.NewInterpreter(mecca.WithTemplateRoot("config/mec"), mecca.WithSession(sess))
+
+	_, _, active := sess.Pty()
+	if !active {
+		return
+	}
+
+	if err := interpreter.RenderTemplate("welcome.mec", map[string]any{
+		"bbsversion": "v1.0.0",
+		"bbsname":    "MaxBBS",
+		"sysopname":  "Max",
+	}); err != nil {
+		slog.Error("RenderTemplate error", "err", err)
+		return
+	}
+
+	login.LoginScreen(sess)
+}
+
 func handler(next ssh.Handler) ssh.Handler {
 	return func(sess ssh.Session) {
-		// Create a new interpreter with a session.
-		interpreter := mecca.NewInterpreter(mecca.WithTemplateRoot("config/mec"), mecca.WithSession(sess))
-
-		_, _, active := sess.Pty()
-		if !active {
-			next(sess)
-			return
-		}
-
-		if err := interpreter.RenderTemplate("welcome.mec", map[string]any{
-			"bbsversion": "v1.0.0",
-			"bbsname":    "MaxBBS",
-			"sysopname":  "Max",
-		}); err != nil {
-			slog.Error("RenderTemplate error", "err", err)
-			next(sess)
-			return
-		}
-
-		time.Sleep(5 * time.Second)
+		connectionHandler(sess)
 		next(sess)
 	}
 }
@@ -51,7 +54,7 @@ func main() {
 
 	port := 3456
 	s, err := wish.NewServer(
-		wish.WithAddress(fmt.Sprintf(":%d", port)),
+		wish.WithAddress(fmt.Sprintf("127.0.0.1:%d", port)),
 		wish.WithHostKeyPath(".ssh/ssh_server_key"),
 		wish.WithMiddleware(handler, logging.MiddlewareWithLogger(charmLogger)),
 	)
